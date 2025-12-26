@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="app-container">
+    <!-- أيقونة الإعدادات -->
+    <a href="/settings" class="settings-nav" title="الإعدادات">⚙️</a>
+
+    <header style="text-align: center; margin-bottom: 25px;">
+        <h1 style="margin: 0; font-size: 28px; letter-spacing: 2px;">PASS<span style="color: var(--accent);">MASTER</span></h1>
+        <p style="font-size: 12px; color: #64748b; margin-top: 5px;">أداة توليد وتخمين كلمات السر الاحترافية</p>
+    </header>
+
+    <!-- نظام التبويبات (Tabs) -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('network', this)">الشبكة</button>
+        <button class="tab-btn" onclick="switchTab('other', this)">شيء آخر</button>
+    </div>
+
+    <!-- شريط التحكم بطول كلمة السر الموحد -->
+    <div class="common-inputs" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 15px; margin-bottom: 20px;">
+        <p class="label-text">عدد الخانات المطلوب: <span id="len_disp" style="color: var(--accent); font-weight: bold;">8</span></p>
+        <input type="range" id="global_length" min="8" max="16" value="8" style="width: 100%; cursor: pointer;" 
+               oninput="document.getElementById('len_disp').innerText=this.value">
+    </div>
+
+    <!-- محتوى قسم الشبكة -->
+    <div id="network-form" class="form-content">
+        <p class="label-text">اسم الشبكة المستهدف</p>
+        <input type="text" id="net_name" class="input-field" placeholder="مثال: MyHome_WiFi">
+        <small style="color: #475569; font-size: 11px; display: block; margin-top: 5px;">سيتم التوليد بناءً على اسم الشبكة بـ 6 حالات مختلفة.</small>
+    </div>
+
+    <!-- محتوى قسم شيء آخر -->
+    <div id="other-form" class="form-content" style="display:none">
+        <p class="label-text">الأرقام والحروف المستهدفة</p>
+        <textarea id="custom_chars" class="input-field" rows="3" placeholder="مثال: 0123456789abc..."></textarea>
+        
+        <label style="display: flex; align-items: center; gap: 10px; margin-top: 15px; cursor: pointer;">
+            <input type="checkbox" id="add_dot" checked style="width: 18px; height: 18px; accent-color: var(--primary);">
+            <span class="label-text" style="color: white; font-size: 13px;">توليد مع نقطة وبدون نقطة</span>
+        </label>
+    </div>
+
+    <!-- أزرار الأكشن في الأسفل -->
+    <div class="bottom-actions">
+        <button class="btn btn-gen" id="gen-btn" onclick="generate()">توليد</button>
+        <button class="btn btn-start" onclick="location.href='/terminal'">بدء التخمين</button>
+    </div>
+    
+    <!-- عرض حالة العملية -->
+    <div id="status" style="text-align:center; margin-top:15px; font-size:13px; min-height: 20px;"></div>
+</div>
+<script>
+/**
+ * التبديل بين قسم الشبكة وقسم شيء آخر
+ */
+function switchTab(type, btn) {
+    // تحديث شكل الأزرار (Tabs)
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    // إظهار النموذج المطلوب وإخفاء الآخر
+    document.getElementById('network-form').style.display = type === 'network' ? 'block' : 'none';
+    document.getElementById('other-form').style.display = type === 'other' ? 'block' : 'none';
+    
+    // تصفير رسالة الحالة عند الانتقال بين التبويبات
+    document.getElementById('status').innerText = "";
+}
+
+/**
+ * إرسال البيانات للباك آند لتوليد القائمة وحفظ الإعدادات للمحاكاة
+ */
+async function generate() {
+    const status = document.getElementById('status');
+    const genBtn = document.getElementById('gen-btn');
+    
+    // 1. تحديد الوضع الحالي (شبكة أم شيء آخر)
+    const isNet = document.getElementById('network-form').style.display !== 'none';
+    const currentMode = isNet ? 'network' : 'other';
+
+    // 2. حفظ البيانات في localStorage لكي يقرأها التيرمينال ويقوم بالمحاكاة الصحيحة
+    localStorage.setItem('last_mode', currentMode);
+    localStorage.setItem('last_net_name', document.getElementById('net_name').value);
+    localStorage.setItem('last_custom_chars', document.getElementById('custom_chars').value);
+    localStorage.setItem('last_length', document.getElementById('global_length').value);
+
+    // 3. تحديث واجهة المستخدم (UI)
+    status.style.color = "#94a3b8";
+    status.innerText = "⏳ جاري توليد القائمة... قد يستغرق هذا وقتاً حسب عدد الاحتمالات";
+    genBtn.disabled = true;
+    
+    // 4. تجهيز البيانات المرسلة للسيرفر (Payload)
+    const payload = {
+        mode: currentMode,
+        name: document.getElementById('net_name').value,
+        length: document.getElementById('global_length').value,
+        chars: document.getElementById('custom_chars').value,
+        add_dot: document.getElementById('add_dot').checked
+    };
+
+    try {
+        // 5. إرسال الطلب إلى الباك آند (Python Flask)
+        const res = await fetch('/api/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        // 6. عرض نتيجة التوليد
+        if (data.status === "Generated") {
+            status.innerHTML = `<span style="color:#10b981; font-weight:bold;">✅ تم توليد ${data.count} احتمال بنجاح</span>`;
+        } else {
+            status.innerHTML = `<span style="color:#ef4444;">❌ حدث خطأ أثناء التوليد</span>`;
+        }
+    } catch (error) {
+        status.innerHTML = `<span style="color:#ef4444;">❌ خطأ: لا يمكن الاتصال بالسيرفر</span>`;
+    } finally {
+        // إعادة تفعيل الزر بعد الانتهاء
+        genBtn.disabled = false;
+    }
+}
+</script>
+
+{% endblock %}

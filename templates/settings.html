@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="app-container">
+    <h2 style="text-align:center; color:var(--accent); margin-bottom:25px;">⚙️ الإعدادات المتقدمة</h2>
+    
+    <!-- ضبط الوقت -->
+    <div class="setting-item">
+        <p class="label-text">وقت تجهيز المؤشر (بالثواني)</p>
+        <input type="number" id="initial_delay" class="input-field" min="1" max="60">
+        <small style="color: #64748b; font-size: 11px;">هذا الوقت المتاح لك لفتح الملف الخارجي ووضع الماوس.</small>
+    </div>
+
+    <!-- ضبط السرعة (كما طلبت في البداية تماماً) -->
+    <div class="setting-item" style="margin-top:20px;">
+        <p class="label-text">سرعة إدخال الكلمات</p>
+        <select id="speed_mode" class="input-field">
+            <option value="1_per_min">كلمة واحدة كل دقيقة</option>
+            <option value="1_per_30s">كلمة واحدة كل 30 ثانية</option>
+            <option value="1_per_10s">كلمة واحدة كل 10 ثواني</option>
+            <option value="1_per_sec">كلمة واحدة في الثانية</option>
+            <option value="10_per_sec">10 كلمات في الثانية</option>
+            <option value="100_per_sec">100 كلمة في الثانية</option>
+            <option value="1000_per_sec">1000 كلمة في الثانية (سرعة قصوى)</option>
+        </select>
+    </div>
+
+    <!-- زر الحفظ والعودة -->
+    <button class="btn btn-start" style="margin-top:35px; width:100%;" onclick="saveSettings()">
+        حفظ التعديلات والعودة
+    </button>
+</div>
+
+<script>
+// عند فتح الصفحة: جلب الإعدادات المحفوظة مسبقاً (إن وجدت)
+document.addEventListener('DOMContentLoaded', () => {
+    const savedDelay = localStorage.getItem('initial_delay') || 5;
+    const savedSpeed = localStorage.getItem('speed_mode') || '1_per_sec';
+    
+    document.getElementById('initial_delay').value = savedDelay;
+    document.getElementById('speed_mode').value = savedSpeed;
+});
+
+function saveSettings() {
+    const delay = document.getElementById('initial_delay').value;
+    const speed = document.getElementById('speed_mode').value;
+
+    // حفظ في ذاكرة المتصفح (LocalStorage)
+    localStorage.setItem('initial_delay', delay);
+    localStorage.setItem('speed_mode', speed);
+
+    // إظهار رسالة سريعة ثم العودة
+    alert("✅ تم حفظ الإعدادات بنجاح");
+    window.location.href = '/';
+}
+</script>
+{% endblock %}

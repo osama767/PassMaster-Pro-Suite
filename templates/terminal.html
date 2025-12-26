@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- حاوية التيرمينال الرئيسية -->
+<div class="terminal-wrapper">
+    <!-- رأس التيرمينال (مثل واجهة أنظمة Linux) -->
+    <div class="terminal-header">
+        <div class="terminal-controls">
+            <span class="control red"></span>
+            <span class="control yellow"></span>
+            <span class="control green"></span>
+        </div>
+        <div class="terminal-title">PASSMASTER EXECUTOR v1.0</div>
+        <div class="status-indicator">
+            <span id="status-dot" class="dot pulsing"></span>
+            <span id="status-text">INITIALIZING...</span>
+        </div>
+    </div>
+
+    <!-- شاشة العرض السوداء -->
+    <div id="terminal-body" class="terminal-body">
+        <div id="log-container">
+            <p class="sys-msg">[INFO] Loading generated wordlist...</p>
+            <p class="sys-msg">[INFO] Waiting for user to place cursor...</p>
+        </div>
+    </div>
+
+    <!-- الجزء السفلي: زر الإيقاف -->
+    <div class="terminal-footer">
+        <button class="btn-stop-emergency" onclick="stopProcess()">
+            <i class="fas fa-hand-paper"></i> إيقاف الطوارئ (ESC)
+        </button>
+    </div>
+</div>
+
+<!-- طبقة العداد التنازلي (تظهر في البداية فقط) -->
+<div id="countdown-overlay">
+    <div class="countdown-content">
+        <div class="timer-circle">
+            <span id="counter-number">5</span>
+        </div>
+        <h2>جهز مؤشر الكتابة!</h2>
+        <p>قم بفتح الملف المطلوب وضع الماوس بداخله الآن</p>
+    </div>
+</div>
+
+<style>
+/* تنسيق التيرمينال المطور */
+.terminal-wrapper {
+    width: 95%;
+    max-width: 600px;
+    background: #000;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 15px rgba(16, 185, 129, 0.2);
+    border: 1px solid #333;
+    margin: auto;
+}
+
+.terminal-header {
+    background: #1a1a1a;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #333;
+}
+
+.terminal-controls { display: flex; gap: 8px; }
+.control { width: 12px; height: 12px; border-radius: 50%; }
+.red { background: #ff5f56; } .yellow { background: #ffbd2e; } .green { background: #27c93f; }
+
+.terminal-title { color: #888; font-size: 12px; font-family: monospace; }
+
+.terminal-body {
+    height: 350px;
+    padding: 20px;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    background: linear-gradient(rgba(0,0,0,0.9), rgba(0,0,0,0.9)), 
+                url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+}
+
+.terminal-body p { margin: 0; padding: 2px 0; }
+.sys-msg { color: #3b82f6; } /* أزرق للمعلومات */
+.attempt-msg { color: #10b981; } /* أخضر للتخمين */
+.error-msg { color: #ef4444; } /* أحمر للأخطاء */
+
+/* العداد التنازلي */
+#countdown-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    transition: 0.5s;
+}
+
+.countdown-content { text-align: center; color: white; }
+.timer-circle {
+    width: 120px; height: 120px;
+    border: 5px solid #10b981;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 60px;
+    font-weight: bold;
+    margin: 0 auto 20px;
+    box-shadow: 0 0 20px #10b981;
+}
+
+.btn-stop-emergency {
+    width: 100%;
+    padding: 15px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.btn-stop-emergency:hover { background: #b91c1c; }
+
+.hidden { opacity: 0; pointer-events: none; }
+
+/* تأثير النبض */
+.pulsing {
+    width: 8px; height: 8px; background: #10b981;
+    border-radius: 50%; display: inline-block;
+    margin-right: 5px; animation: blink 1s infinite;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+<script>
+const logContainer = document.getElementById('log-container');
+const body = document.getElementById('terminal-body');
+
+/**
+ * وظيفة إضافة النصوص إلى شاشة التيرمينال
+ */
+function addLog(text, type = 'attempt') {
+    const p = document.createElement('p');
+    p.className = type + '-msg';
+    const time = new Date().toLocaleTimeString().split(' ')[0];
+    p.innerText = `[${time}] ${text}`;
+    logContainer.appendChild(p);
+    body.scrollTop = body.scrollHeight;
+}
+
+// جلب الإعدادات من ذاكرة المتصفح (LocalStorage)
+let initialDelay = parseInt(localStorage.getItem('initial_delay')) || 5;
+let speedMode = localStorage.getItem('speed_mode') || "1_per_sec";
+let timeLeft = initialDelay;
+
+const counterNum = document.getElementById('counter-number');
+const overlay = document.getElementById('countdown-overlay');
+
+// تحديث الرقم الأولي في الواجهة
+if (counterNum) counterNum.innerText = timeLeft;
+
+/**
+ * العداد التنازلي قبل بدء العمل
+ */
+const countdown = setInterval(() => {
+    timeLeft--;
+    if (counterNum) counterNum.innerText = timeLeft;
+    
+    if (timeLeft <= 0) {
+        clearInterval(countdown);
+        if (overlay) overlay.classList.add('hidden');
+        startAttack();
+    }
+}, 1000);
+
+/**
+ * دالة المحاكاة البصرية المطورة (تتعامل مع وضع الشبكة ووضع شيء آخر)
+ */
+function startVisualSimulation() {
+    const mode = localStorage.getItem('last_mode'); // network or other
+    const netName = localStorage.getItem('last_net_name') || "User";
+    const customChars = localStorage.getItem('last_custom_chars') || "abc123";
+    const length = parseInt(localStorage.getItem('last_length')) || 8;
+
+    const mockInterval = setInterval(() => {
+        let pattern = "";
+
+        if (mode === 'network') {
+            // محاكاة وضع الشبكة (الحالات الستة المطلوبة)
+            const variations = [
+                netName.toLowerCase(), 
+                netName.toUpperCase(), 
+                netName.charAt(0).toUpperCase() + netName.slice(1).toLowerCase()
+            ];
+            const base = variations[Math.floor(Math.random() * variations.length)];
+            
+            // توليد أرقام عشوائية لتكملة الطول
+            let digitsNeeded = length - base.length;
+            if (Math.random() > 0.5) digitsNeeded -= 1; // لترك مكان للنقطة
+
+            let randDigits = "";
+            for(let i=0; i < Math.max(0, digitsNeeded); i++) {
+                randDigits += Math.floor(Math.random() * 10);
+            }
+
+            // إضافة الكلمة مع أو بدون نقطة
+            pattern = (base + randDigits);
+            if (pattern.length < length) pattern += ".";
+            
+        } else {
+            // محاكاة وضع "شيء آخر" (استخدام الحروف والارقام المدخلة حصراً!)
+            for (let i = 0; i < length; i++) {
+                pattern += customChars.charAt(Math.floor(Math.random() * customChars.length));
+            }
+            // إضافة نقطة عشوائياً إذا كان طول الكلمة يسمح
+            if (Math.random() > 0.7) pattern += ".";
+        }
+        
+        addLog("Testing: " + pattern);
+    }, 80); // سرعة التحديث البصري
+
+    window.stopMock = () => clearInterval(mockInterval);
+}
+
+/**
+ * الوظيفة الرئيسية لبدء الهجوم والربط مع البايثون
+ */
+async function startAttack() {
+    // تحديث واجهة التيرمينال
+    document.getElementById('status-text').innerText = "RUNNING ATTACK...";
+    const dot = document.getElementById('status-dot');
+    if (dot) dot.style.background = "#ef4444";
+    
+    addLog("Initializing Brute-Force engine...", "sys");
+    addLog(`Mode: ${localStorage.getItem('last_mode') === 'network' ? 'Network' : 'Custom'}`, "sys");
+    addLog(`Speed: ${speedMode.replace(/_/g, ' ')}`, "sys");
+    
+    // بدء المحاكاة البصرية على الشاشة بناءً على المدخلات
+    startVisualSimulation();
+
+    // إرسال الطلب الحقيقي للباك آند (بايثون) لتشغيل الأتمتة
+    try {
+        await fetch('/api/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                initial_delay: 0, 
+                speed_mode: speedMode 
+            })
+        });
+    } catch (error) {
+        addLog("ERROR: Backend connection failed!", "error");
+    }
+}
+
+/**
+ * وظيفة إيقاف العملية (الباك آند والمحاكاة)
+ */
+async function stopProcess() {
+    // إيقاف البايثون
+    await fetch('/api/stop', { method: 'POST' });
+    
+    // إيقاف المحاكاة البصرية
+    if(window.stopMock) window.stopMock();
+    
+    addLog("!!! EMERGENCY STOP SIGNAL SENT !!!", "error");
+    document.getElementById('status-text').innerText = "HALTED";
+    
+    // العودة للرئيسية بعد فترة قصيرة
+    setTimeout(() => { window.location.href = '/'; }, 1500);
+}
+
+/**
+ * دعم زر ESC للإيقاف الفوري من الكيبورد
+ */
+document.addEventListener('keydown', (e) => {
+    if (e.key === "Escape") stopProcess();
+});
+</script>
+
+{% endblock %}
